@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 
+// Vercel serverless function timeout (max 60s on Hobby, 300s on Pro)
+export const maxDuration = 60;
+
 const SCRAPER_URL = (process.env.SCRAPER_SERVICE_URL || 'http://localhost:3001').trim().replace(/\/+$/, '');
 const SCRAPER_TOKEN = (process.env.SCRAPER_SECRET_TOKEN || 'generate-a-random-string-here').trim();
 
@@ -22,7 +25,7 @@ export async function POST(req: Request) {
       headers: {
         'Authorization': `Bearer ${SCRAPER_TOKEN}`
       },
-      signal: AbortSignal.timeout(30000)
+      signal: AbortSignal.timeout(55000) // 55s (Vercel max 60s)
     });
 
     if (!response.ok) {
