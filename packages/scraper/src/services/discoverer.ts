@@ -1,4 +1,4 @@
-import { createPageContext } from './browser';
+import * as cheerio from 'cheerio';
 
 export interface DiscoverLink {
   url: string;
@@ -6,51 +6,65 @@ export interface DiscoverLink {
   depth: number;
 }
 
+/**
+ * Lightweight link discoverer using fetch + cheerio.
+ * No Playwright needed — much faster on constrained servers.
+ */
 export const discoverLinks = async (targetUrl: string): Promise<DiscoverLink[]> => {
-  const { context, page } = await createPageContext();
   const links: DiscoverLink[] = [];
   const origin = new URL(targetUrl).origin;
 
   try {
-    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    const response = await fetch(targetUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9,tr;q=0.8',
+      },
+      signal: AbortSignal.timeout(15000),
+    });
 
-    const Selectors = [
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} from ${targetUrl}`);
+    }
+
+    const html = await response.text();
+    const $ = cheerio.load(html);
+
+    const selectors = [
       'nav a[href]',
       'header a[href]',
       'footer a[href]',
       '[class*="menu"] a[href]',
       '[class*="nav"] a[href]',
-      '[class*="category"] a[href]'
+      '[class*="category"] a[href]',
     ];
 
     const rawLinks: { href: string; text: string }[] = [];
 
-    // Evaluate all selectors in browser context
-    for (const selector of Selectors) {
-      if (await page.$(selector)) {
-        const found = await page.$$eval(selector, (elements: any[]) => {
-          return elements.map(el => ({
-            href: (el as HTMLAnchorElement).href,
-            text: (el as HTMLAnchorElement).innerText.trim()
-          }));
-        });
-        rawLinks.push(...found);
-      }
+    for (const selector of selectors) {
+      $(selector).each((_i: number, el: any) => {
+        const href = $(el).attr('href');
+        const text = $(el).text().trim();
+        if (href) {
+          rawLinks.push({ href, text });
+        }
+      });
     }
 
     // Process and filter
     const uniqueUrls = new Set<string>();
-    
+
     for (const item of rawLinks) {
       try {
-        if (!item.href || item.href.startsWith('javascript:')) continue;
-        
+        if (!item.href || item.href.startsWith('javascript:') || item.href === '#') continue;
+
         const urlObj = new URL(item.href, origin);
         const cleanUrl = urlObj.origin + urlObj.pathname + urlObj.search;
 
         if (urlObj.origin !== origin) continue; // Same domain only
-        
-        // Remove direct product URLs
+
+        // Skip obvious product URLs (we want categories/collections)
         const lowerUrl = cleanUrl.toLowerCase();
         if (lowerUrl.includes('/product/') || lowerUrl.includes('/p/') || lowerUrl.includes('/item/')) {
           continue;
@@ -61,19 +75,15 @@ export const discoverLinks = async (targetUrl: string): Promise<DiscoverLink[]> 
           links.push({
             url: cleanUrl,
             label: item.text || cleanUrl.replace(origin, ''),
-            depth: urlObj.pathname.split('/').filter(Boolean).length
+            depth: urlObj.pathname.split('/').filter(Boolean).length,
           });
         }
-      } catch (e) {
+      } catch {
         // Ignore invalid URLs
       }
     }
-
   } catch (error: any) {
     console.error('Discoverer Error:', error.message);
-  } finally {
-    await page.close();
-    await context.close();
   }
 
   return links;
