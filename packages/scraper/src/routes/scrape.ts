@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { createPageContext } from '../services/browser';
 import { scrapeProduct } from '../services/productScraper';
-import { uploadImages } from '../services/imageUploader';
 import { saveProduct } from '../services/dbWriter';
 import { randomDelay } from '../utils/delay';
 import { supabase, log } from '../utils/logger';
@@ -11,70 +10,84 @@ const router = Router();
 router.post('/', async (req, res) => {
   const { targetUrl, selectedUrls, config, sessionId } = req.body;
 
+  console.log('[SCRAPE] Received request:', { sessionId, targetUrl, urlCount: selectedUrls?.length });
+
   if (!sessionId || !selectedUrls || !Array.isArray(selectedUrls)) {
+    console.error('[SCRAPE] Invalid payload');
     return res.status(400).json({ error: 'Invalid payload' });
   }
 
   // Update session status
-  await supabase.from('scrape_sessions').update({ status: 'running' }).eq('id', sessionId);
-  await log(sessionId, 'info', `Scraping started. Total category targets: ${selectedUrls.length}`);
+  if (supabase) {
+    await supabase.from('scrape_sessions').update({ status: 'running' }).eq('id', sessionId);
+  }
+  await log(sessionId, 'info', `Scraping started. Total targets: ${selectedUrls.length}`);
+  console.log('[SCRAPE] Session status set to running');
 
-  // We immediately respond to free up the client connection
-  // Scraping continues in the background
+  // Immediately respond to free up the client connection
   res.json({ status: 'started', sessionId });
 
   const maxProducts = config?.maxProducts || 100;
-  const shouldDownloadImages = config?.downloadImages !== false;
-
   let productsFound = 0;
 
   try {
+    console.log('[SCRAPE] Launching Playwright browser...');
     const { context, page } = await createPageContext();
+    console.log('[SCRAPE] Browser launched successfully');
 
     for (const url of selectedUrls) {
       if (productsFound >= maxProducts) break;
 
+      console.log(`[SCRAPE] Processing: ${url}`);
       await log(sessionId, 'info', `Processing URL: ${url}`);
       
       try {
         const productData = await scrapeProduct(url, page);
-        
-        if (shouldDownloadImages && productData.images.length > 0) {
-          await log(sessionId, 'info', `Uploading ${productData.images.length} images...`);
-          productData.images = await uploadImages(productData.images, productData.sku, url);
-        }
+        console.log(`[SCRAPE] Scraped: ${productData.title}`);
 
+        // Resimleri Supabase'e YUKLEMIYORUZ - orijinal URL olarak kaydediyoruz
+        // ZIP indirme zaten orijinal URL'lerden çekiyor
         await saveProduct(productData, url, sessionId);
         productsFound++;
+        console.log(`[SCRAPE] Saved product #${productsFound}: ${productData.title}`);
 
-        await randomDelay(); // Rate limiting
+        await randomDelay();
       } catch (err: any) {
+        console.error(`[SCRAPE] Error on ${url}:`, err.message);
         await log(sessionId, 'error', `Error processing ${url}: ${err.message}`);
-        await supabase.from('failed_jobs').insert({
-          session_id: sessionId,
-          url,
-          error_message: err.message
-        });
+        if (supabase) {
+          await supabase.from('failed_jobs').insert({
+            session_id: sessionId,
+            url,
+            error_message: err.message
+          });
+        }
       }
     }
 
     await page.close();
     await context.close();
+    console.log('[SCRAPE] Browser closed');
 
-    await supabase.from('scrape_sessions').update({ 
-      status: 'completed',
-      finished_at: new Date().toISOString()
-    }).eq('id', sessionId);
+    if (supabase) {
+      await supabase.from('scrape_sessions').update({ 
+        status: 'completed',
+        finished_at: new Date().toISOString()
+      }).eq('id', sessionId);
+    }
     
     await log(sessionId, 'success', `Scraping completed. Processed ${productsFound} items.`);
+    console.log(`[SCRAPE] Done. ${productsFound} products saved.`);
 
   } catch (globalErr: any) {
-    console.error('Fatal scrape error:', globalErr);
-    await log(sessionId, 'error', `Fatal error during scraping: ${globalErr.message}`);
-    await supabase.from('scrape_sessions').update({ 
-      status: 'failed',
-      finished_at: new Date().toISOString()
-    }).eq('id', sessionId);
+    console.error('[SCRAPE] FATAL ERROR:', globalErr.message, globalErr.stack);
+    await log(sessionId, 'error', `Fatal error: ${globalErr.message}`);
+    if (supabase) {
+      await supabase.from('scrape_sessions').update({ 
+        status: 'failed',
+        finished_at: new Date().toISOString()
+      }).eq('id', sessionId);
+    }
   }
 });
 
