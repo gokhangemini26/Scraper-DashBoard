@@ -15,18 +15,40 @@ export interface ProductData {
  * Lightweight product scraper using fetch + cheerio.
  * No Playwright/Chromium needed — works on any server.
  */
-export const scrapeProduct = async (url: string): Promise<ProductData> => {
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9',
-    },
-    signal: AbortSignal.timeout(20000),
-  });
+export const scrapeProduct = async (url: string, retries = 3): Promise<ProductData> => {
+  let response;
+  
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Upgrade-Insecure-Requests': '1'
+        },
+        signal: AbortSignal.timeout(20000),
+      });
 
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status} from ${url}`);
+      if (response.ok) break;
+      if (response.status === 404) throw new Error('HTTP 404 Not Found');
+      
+      console.warn(`[SCRAPE] HTTP ${response.status} on ${url}. Retrying... (${attempt + 1}/${retries})`);
+    } catch (err: any) {
+      if (attempt === retries - 1) throw err;
+      console.warn(`[SCRAPE] Fetch error on ${url}: ${err.message}. Retrying... (${attempt + 1}/${retries})`);
+    }
+    
+    // Exponential backoff waiting: 3s, 6s, 9s etc.
+    await new Promise(r => setTimeout(r, 3000 * (attempt + 1)));
+  }
+
+  if (!response || !response.ok) {
+    throw new Error(`HTTP ${response?.status || 'Unknown'} from ${url} after ${retries} retries`);
   }
 
   const html = await response.text();
