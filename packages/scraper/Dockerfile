@@ -1,5 +1,5 @@
-# Resmi Playwright imajını kullanıyoruz. Bu imaj içinde Chrome/Chromium için gerekli tüm arka plan kütüphaneleri (OS libs) hazırdır.
-FROM mcr.microsoft.com/playwright:v1.42.1-jammy
+# Playwright v1.58.2 ile uyumlu Docker imajı
+FROM mcr.microsoft.com/playwright:v1.58.2-jammy
 
 # Çalışma dizini
 WORKDIR /app
