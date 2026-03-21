@@ -1,4 +1,5 @@
-import { chromium, Browser, BrowserContext, Page } from 'playwright-extra';
+import { Browser, BrowserContext, Page } from 'playwright';
+import { chromium } from 'playwright-extra';
 // @ts-ignore
 import stealth from 'puppeteer-extra-plugin-stealth';
 

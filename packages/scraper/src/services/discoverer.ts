@@ -28,7 +28,7 @@ export const discoverLinks = async (targetUrl: string): Promise<DiscoverLink[]> 
     // Evaluate all selectors in browser context
     for (const selector of Selectors) {
       if (await page.$(selector)) {
-        const found = await page.$$eval(selector, elements => {
+        const found = await page.$$eval(selector, (elements: any[]) => {
           return elements.map(el => ({
             href: (el as HTMLAnchorElement).href,
             text: (el as HTMLAnchorElement).innerText.trim()

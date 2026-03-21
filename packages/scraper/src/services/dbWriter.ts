@@ -17,15 +17,14 @@ export const saveProduct = async (productData: ProductData, url: string, session
     await log(sessionId, 'success', `Saved: ${productData.title}`);
     
     // Update session stats
-    await supabase.rpc('increment_session_stats', { p_session_id: sessionId, p_type: 'saved' })
-      .catch(() => {
-        // Fallback if RPC doesn't exist
-        supabase.from('scrape_sessions')
-          .select('total_saved').eq('id', sessionId).single()
-          .then(({ data }) => {
-            if (data) supabase.from('scrape_sessions').update({ total_saved: data.total_saved + 1 }).eq('id', sessionId).then();
-          });
-      });
+    try {
+      const { error: rpcErr } = await supabase.rpc('increment_session_stats', { p_session_id: sessionId, p_type: 'saved' });
+      if (rpcErr) throw rpcErr;
+    } catch {
+      // Fallback if RPC doesn't exist
+      const { data } = await supabase.from('scrape_sessions').select('total_saved').eq('id', sessionId).single();
+      if (data) await supabase.from('scrape_sessions').update({ total_saved: data.total_saved + 1 }).eq('id', sessionId);
+    }
 
   } catch (error: any) {
     console.error('saveProduct Error:', error.message);

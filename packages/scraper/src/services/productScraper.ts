@@ -1,4 +1,4 @@
-import { Page } from 'playwright-extra';
+import { Page } from 'playwright';
 
 export interface ProductData {
   title: string;
@@ -18,7 +18,7 @@ export const scrapeProduct = async (url: string, page: Page): Promise<ProductDat
 
   // Helper to get LD+JSON
   const getJsonLd = async () => {
-    return await page.$$eval('script[type="application/ld+json"]', scripts => {
+    return await page.$$eval('script[type="application/ld+json"]', (scripts: any[]) => {
       for (const script of scripts) {
         try {
           const data = JSON.parse(script.textContent || '{}');
