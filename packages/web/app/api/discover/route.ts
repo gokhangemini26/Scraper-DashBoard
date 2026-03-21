@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
-const SCRAPER_URL = process.env.SCRAPER_SERVICE_URL || 'http://localhost:3001';
-const SCRAPER_TOKEN = process.env.SCRAPER_SECRET_TOKEN || 'generate-a-random-string-here';
+const SCRAPER_URL = (process.env.SCRAPER_SERVICE_URL || 'http://localhost:3001').trim().replace(/\/+$/, '');
+const SCRAPER_TOKEN = (process.env.SCRAPER_SECRET_TOKEN || 'generate-a-random-string-here').trim();
 
 export async function POST(req: Request) {
   try {
