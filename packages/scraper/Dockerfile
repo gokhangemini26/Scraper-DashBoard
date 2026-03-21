@@ -12,7 +12,6 @@ RUN npm install
 
 # Kaynak kodları kopyala
 COPY src ./src
-COPY .env.example ./.env
 
 # TypeScript'i derle
 RUN npm run build
