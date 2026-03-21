@@ -1,4 +1,4 @@
-import { Page } from 'playwright';
+import * as cheerio from 'cheerio';
 
 export interface ProductData {
   title: string;
@@ -11,115 +11,124 @@ export interface ProductData {
   raw_data: any;
 }
 
-export const scrapeProduct = async (url: string, page: Page): Promise<ProductData> => {
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-  
+/**
+ * Lightweight product scraper using fetch + cheerio.
+ * No Playwright/Chromium needed — works on any server.
+ */
+export const scrapeProduct = async (url: string): Promise<ProductData> => {
+  const response = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+    },
+    signal: AbortSignal.timeout(20000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} from ${url}`);
+  }
+
+  const html = await response.text();
+  const $ = cheerio.load(html);
+  const origin = new URL(url).origin;
   const rawData: any = { url };
 
-  // Helper to get LD+JSON
-  const getJsonLd = async () => {
-    return await page.$$eval('script[type="application/ld+json"]', (scripts: any[]) => {
-      for (const script of scripts) {
-        try {
-          const data = JSON.parse(script.textContent || '{}');
-          if (data['@type'] === 'Product' || (Array.isArray(data['@graph']) && data['@graph'].some((item: any) => item['@type'] === 'Product'))) {
-            return Array.isArray(data['@graph']) ? data['@graph'].find((item: any) => item['@type'] === 'Product') : data;
-          }
-        } catch (e) {}
+  // --- LD+JSON (most e-commerce sites use this) ---
+  let jsonLd: any = null;
+  $('script[type="application/ld+json"]').each((_i: number, el: any) => {
+    try {
+      const data = JSON.parse($(el).html() || '{}');
+      if (data['@type'] === 'Product') {
+        jsonLd = data;
+      } else if (Array.isArray(data['@graph'])) {
+        const product = data['@graph'].find((item: any) => item['@type'] === 'Product');
+        if (product) jsonLd = product;
       }
-      return null;
-    });
-  };
-
-  const jsonLd = await getJsonLd();
+    } catch {}
+  });
   rawData.jsonLd = jsonLd;
 
-  // Title
-  let title = await page.evaluate(() => {
-    return document.querySelector('h1')?.textContent?.trim() ||
-           document.querySelector('meta[property="og:title"]')?.getAttribute('content')?.trim() ||
-           document.title.trim();
-  });
+  // --- Title ---
+  let title = jsonLd?.name
+    || $('h1').first().text().trim()
+    || $('meta[property="og:title"]').attr('content')?.trim()
+    || $('title').text().trim()
+    || 'Unknown Product';
 
-  // Description
-  let description = await page.evaluate(() => {
-    return document.querySelector('meta[property="og:description"]')?.getAttribute('content')?.trim() ||
-           (document.querySelector('[class*="description"]') as HTMLElement)?.innerText?.trim() ||
-           Array.from(document.querySelectorAll('[class*="product-detail"] p')).map(p => (p as HTMLElement).innerText).join('\n') || null;
-  });
+  // --- Description ---
+  let description = jsonLd?.description
+    || $('meta[property="og:description"]').attr('content')?.trim()
+    || $('[class*="description"]').first().text().trim()
+    || null;
 
-  // Price
+  // --- Price ---
   let priceStr: string | null = null;
-  if (jsonLd && jsonLd.offers) {
-    priceStr = jsonLd.offers.price || (jsonLd.offers[0] && jsonLd.offers[0].price);
+  if (jsonLd?.offers) {
+    const offers = Array.isArray(jsonLd.offers) ? jsonLd.offers[0] : jsonLd.offers;
+    priceStr = offers?.price?.toString() || null;
   }
   if (!priceStr) {
-    priceStr = await page.evaluate(() => {
-      return document.querySelector('meta[property="product:price:amount"]')?.getAttribute('content') ||
-             (document.querySelector('[class*="price"][class*="sale"]') as HTMLElement)?.innerText ||
-             (document.querySelector('[class*="price-new"]') as HTMLElement)?.innerText ||
-             (document.querySelector('[class*="price"]') as HTMLElement)?.innerText || null;
-    });
+    priceStr = $('meta[property="product:price:amount"]').attr('content')
+      || $('[class*="price"]').first().text().trim()
+      || null;
   }
-  
   const price = priceStr ? parseFloat(priceStr.replace(/[^0-9.,]/g, '').replace(',', '.')) : null;
 
-  // Images
+  // --- Sale Price ---
+  let salePriceStr: string | null = null;
+  if (jsonLd?.offers) {
+    const offers = Array.isArray(jsonLd.offers) ? jsonLd.offers[0] : jsonLd.offers;
+    if (offers?.price && offers?.highPrice && offers.price !== offers.highPrice) {
+      salePriceStr = offers.price.toString();
+    }
+  }
+  const sale_price = salePriceStr ? parseFloat(salePriceStr.replace(/[^0-9.,]/g, '').replace(',', '.')) : null;
+
+  // --- Images ---
   let images: string[] = [];
-  if (jsonLd && jsonLd.image) {
+  if (jsonLd?.image) {
     images = Array.isArray(jsonLd.image) ? jsonLd.image : [jsonLd.image];
   }
   if (images.length === 0) {
-    images = await page.evaluate(() => {
-      const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute('content');
-      const imgElements = Array.from(document.querySelectorAll<HTMLImageElement>('[class*="product"] img[src], img[data-src]'));
-      
-      const extracted = imgElements
-        .filter(img => img.width >= 300 || img.naturalWidth >= 300 || !img.naturalWidth)
-        .map(img => img.getAttribute('data-src') || img.src)
-        .filter(Boolean) as string[];
+    const ogImage = $('meta[property="og:image"]').attr('content');
+    if (ogImage) images.push(ogImage);
 
-      if (ogImage) extracted.unshift(ogImage);
-      return Array.from(new Set(extracted)).slice(0, 10);
+    $('[class*="product"] img[src], [class*="gallery"] img[src], img[data-src]').each((_i: number, el: any) => {
+      const src = $(el).attr('data-src') || $(el).attr('src');
+      if (src && !images.includes(src)) images.push(src);
     });
   }
+  // Ensure absolute URLs and max 10
+  images = images
+    .map(img => (img.startsWith('http') ? img : new URL(img, origin).href))
+    .slice(0, 10);
 
-  // Ensure absolute URLs
-  const origin = new URL(url).origin;
-  images = images.map(img => (img.startsWith('http') ? img : new URL(img, origin).href));
+  // --- SKU ---
+  let sku = jsonLd?.sku
+    || $('meta[name="product-id"]').attr('content')
+    || $('[itemprop="sku"]').text().trim()
+    || $('[class*="sku"]').first().text().trim()
+    || null;
 
-  // SKU
-  let skuStr: string | null = null;
-  if (jsonLd && jsonLd.sku) skuStr = jsonLd.sku;
-  if (!skuStr) {
-    skuStr = await page.evaluate(() => {
-      return document.querySelector('meta[name="product-id"]')?.getAttribute('content') ||
-             (document.querySelector('[class*="sku"]') as HTMLElement)?.innerText ||
-             document.querySelector('[data-sku]')?.getAttribute('data-sku') ||
-             document.querySelector('[itemprop="sku"]')?.textContent || null;
-    });
-  }
-
-  // Stock
+  // --- Stock ---
   let inStock = true;
-  if (jsonLd && jsonLd.offers) {
-    const availability = jsonLd.offers.availability || (jsonLd.offers[0] && jsonLd.offers[0].availability);
-    if (availability && typeof availability === 'string') {
+  if (jsonLd?.offers) {
+    const offers = Array.isArray(jsonLd.offers) ? jsonLd.offers[0] : jsonLd.offers;
+    const availability = offers?.availability || '';
+    if (typeof availability === 'string') {
       inStock = availability.includes('InStock');
     }
-  } else {
-    const isOutOfStock = await page.$('[class*="out-of-stock"]');
-    if (isOutOfStock) inStock = false;
   }
 
   return {
-    title: title || 'Bilinmeyen Ürün',
+    title,
     description: description || null,
-    price: price || null,
-    sale_price: null,
+    price: isNaN(price as number) ? null : price,
+    sale_price: isNaN(sale_price as number) ? null : sale_price,
     images,
-    sku: skuStr ? skuStr.trim() : null,
+    sku: sku ? sku.trim() : null,
     in_stock: inStock,
-    raw_data: rawData
+    raw_data: rawData,
   };
 };
