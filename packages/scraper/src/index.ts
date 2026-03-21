@@ -18,12 +18,20 @@ const SECRET_TOKEN = process.env.SCRAPER_SECRET_TOKEN || 'generate-a-random-stri
 app.use(cors());
 app.use(express.json());
 
-// Token validation middleware
+// Health check — no auth required (Render uses this)
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', service: 'smartscraper-engine', timestamp: new Date().toISOString() });
+});
+
+// Token validation middleware (only for /discover and /scrape)
 app.use((req, res, next) => {
+  // Skip auth in dev mode when no token is configured
+  if (!SECRET_TOKEN || SECRET_TOKEN === 'generate-a-random-string-here') {
+    return next();
+  }
+
   const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token;
-  if (!process.env.SCRAPER_SECRET_TOKEN && token !== SECRET_TOKEN) {
-      // If dev without tokens skip or log
-  } else if (token !== SECRET_TOKEN) {
+  if (token !== SECRET_TOKEN) {
     return res.status(401).json({ error: 'Unauthorized scraper access' });
   }
   next();
@@ -31,10 +39,6 @@ app.use((req, res, next) => {
 
 app.use('/discover', discoverRouter);
 app.use('/scrape', scrapeRouter);
-
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'smartscraper-engine', timestamp: new Date().toISOString() });
-});
 
 app.listen(PORT, () => {
   console.log(`🚀 Scraper service is running on http://localhost:${PORT}`);
