@@ -67,6 +67,21 @@ router.post('/', async (req, res) => {
 
     for (let i = 0; i < urlsToScrape.length; i++) {
       const url = urlsToScrape[i];
+
+      // Check if session was cancelled by the user
+      if (supabase) {
+        const { data: sessionCheck } = await supabase
+          .from('scrape_sessions')
+          .select('status')
+          .eq('id', sessionId)
+          .single();
+        if (sessionCheck?.status === 'cancelled') {
+          await log(sessionId, 'warn', `⛔ Tarama kullanıcı tarafından durduruldu. ${totalSaved} ürün kaydedildi.`);
+          console.log('[SCRAPE] Cancelled by user');
+          break;
+        }
+      }
+
       console.log(`[SCRAPE] [${i + 1}/${urlsToScrape.length}] ${url}`);
       await log(sessionId, 'info', `🛒 [${i + 1}/${urlsToScrape.length}] Scraping: ${url}`);
       

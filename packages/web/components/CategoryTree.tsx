@@ -1,13 +1,14 @@
 'use client';
 import { useScrapeStore } from '@/stores/scrapeStore';
+import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Play, Loader2 } from 'lucide-react';
+import { Play, Loader2, StopCircle } from 'lucide-react';
 
 export default function CategoryTree() {
-  const { discoveredLinks, selectedLinks, toggleLink, selectAll, clearAll, isScraping, setCurrentSession, setScraping } = useScrapeStore();
+  const { discoveredLinks, selectedLinks, toggleLink, selectAll, clearAll, isScraping, currentSessionId, setCurrentSession, setScraping } = useScrapeStore();
 
   const handleStartScrape = async () => {
     if (selectedLinks.length === 0) return;
@@ -35,6 +36,13 @@ export default function CategoryTree() {
     }
   };
 
+  const handleStopScrape = async () => {
+    if (!currentSessionId) return;
+    const supabase = createClient();
+    await supabase.from('scrape_sessions').update({ status: 'cancelled' }).eq('id', currentSessionId);
+    setScraping(false);
+  };
+
   if (discoveredLinks.length === 0) return null;
 
   return (
@@ -54,11 +62,21 @@ export default function CategoryTree() {
             className="font-bold"
           >
             {isScraping ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Tarama Başlatıldı</>
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Taranıyor...</>
             ) : (
               <><Play className="mr-2 h-4 w-4" /> {selectedLinks.length} Linki Tara</>
             )}
           </Button>
+          {isScraping && (
+            <Button 
+              onClick={handleStopScrape} 
+              variant="destructive"
+              size="sm"
+              className="font-bold"
+            >
+              <StopCircle className="mr-2 h-4 w-4" /> Durdur
+            </Button>
+          )}
         </div>
         
         <ScrollArea className="h-[350px] border rounded-md p-4 bg-background">
