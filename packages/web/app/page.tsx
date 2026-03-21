@@ -4,8 +4,7 @@ import CategoryTree from '@/components/CategoryTree';
 import StatsBar from '@/components/StatsBar';
 import LiveLogPanel from '@/components/LiveLogPanel';
 import ProductsTable from '@/components/ProductsTable';
-import { Bot, Github } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Bot } from 'lucide-react';
 
 export default function Home() {
   return (
@@ -29,16 +28,7 @@ export default function Home() {
                 <h1 className="text-3xl font-black tracking-tight">
                   SmartScraper <span className="text-primary opacity-90">Dashboard</span>
                 </h1>
-                <p className="text-muted-foreground text-sm mt-1">Otonom E-Ticaret Veri Toplama Motoru</p>
               </div>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <Button variant="outline" size="sm" asChild>
-                <a href="https://github.com" target="_blank" rel="noreferrer">
-                  <Github className="w-4 h-4 mr-2" /> GitHub
-                </a>
-              </Button>
             </div>
           </header>
 
