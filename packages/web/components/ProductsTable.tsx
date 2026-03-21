@@ -46,7 +46,14 @@ export default function ProductsTable() {
         table: 'products',
         filter: `scrape_session_id=eq.${currentSessionId}`
       }, (payload) => {
-        setProducts(prev => prev.map(p => p.id === payload.new.id ? payload.new : p));
+        setProducts(prev => {
+          const exists = prev.find(p => p.id === payload.new.id);
+          if (exists) {
+            return prev.map(p => p.id === payload.new.id ? payload.new : p);
+          } else {
+            return [payload.new, ...prev].slice(0, 50);
+          }
+        });
       })
       .subscribe();
 

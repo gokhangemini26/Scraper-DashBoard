@@ -11,13 +11,35 @@ export default function SessionHistory() {
   const { currentSessionId, setCurrentSession } = useScrapeStore();
 
   useEffect(() => {
-    // Fetch last 20 sessions on mount or when active session is updated 
+    const supabase = createClient();
+    
+    // Initial fetch
     fetch('/api/sessions')
       .then(res => res.json())
       .then(data => {
         if (data.sessions) setSessions(data.sessions);
       })
       .catch(console.error);
+
+    // Listen for live updates
+    const channel = supabase
+      .channel('sessions-channel')
+      .on('postgres_changes', {
+        event: '*', 
+        schema: 'public', 
+        table: 'scrape_sessions'
+      }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          setSessions(prev => [payload.new, ...prev].slice(0, 20));
+        } else if (payload.eventType === 'UPDATE') {
+          setSessions(prev => prev.map(s => s.id === payload.new.id ? payload.new : s));
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [currentSessionId]); 
 
   return (
