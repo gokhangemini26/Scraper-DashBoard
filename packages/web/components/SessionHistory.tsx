@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { History } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
 
 export default function SessionHistory() {
   const [sessions, setSessions] = useState<any[]>([]);
@@ -28,7 +29,7 @@ export default function SessionHistory() {
         event: '*', 
         schema: 'public', 
         table: 'scrape_sessions'
-      }, (payload) => {
+      }, (payload: any) => {
         if (payload.eventType === 'INSERT') {
           setSessions(prev => [payload.new, ...prev].slice(0, 20));
         } else if (payload.eventType === 'UPDATE') {
