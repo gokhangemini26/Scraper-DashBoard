@@ -26,7 +26,10 @@ export async function POST(req: Request) {
     });
 
     if (!response.ok) {
-      throw new Error(`Scraper responded with ${response.status}`);
+      let errorBody = '';
+      try { errorBody = await response.text(); } catch {}
+      console.error(`Scraper error ${response.status}:`, errorBody);
+      throw new Error(`Scraper responded with ${response.status}: ${errorBody}`);
     }
 
     const data = await response.json();
