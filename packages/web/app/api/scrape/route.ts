@@ -32,8 +32,8 @@ export async function POST(req: Request) {
       throw new Error(`Failed to create session: ${dbError?.message}`);
     }
 
-    // Trigger scraper asynchronously
-    fetch(`${SCRAPER_URL}/scrape`, {
+    // Trigger scraper — MUST await so Vercel doesn't kill the request
+    const scraperRes = await fetch(`${SCRAPER_URL}/scrape`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -44,10 +44,15 @@ export async function POST(req: Request) {
         selectedUrls,
         config: config || { maxProducts: 100, downloadImages: true },
         sessionId: session.id
-      })
-    }).catch(err => {
-      console.error('Failed to trigger scraper:', err.message);
+      }),
+      signal: AbortSignal.timeout(55000)
     });
+
+    if (!scraperRes.ok) {
+      let errorBody = '';
+      try { errorBody = await scraperRes.text(); } catch {}
+      console.error(`Scraper trigger failed ${scraperRes.status}:`, errorBody);
+    }
 
     return NextResponse.json({ sessionId: session.id });
 
