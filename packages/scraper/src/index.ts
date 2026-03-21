@@ -3,6 +3,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 
+// Try loading .env from multiple potential paths (local dev vs Docker)
+dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
 import discoverRouter from './routes/discover';
