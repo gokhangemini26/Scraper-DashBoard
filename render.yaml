@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: smartscraper-backend
+    env: docker
+    rootDir: packages/scraper
+    dockerfilePath: ./Dockerfile
+    plan: free # Veya ihtiyaca göre starter
+    region: frankfurt
+    envVars:
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SCRAPER_SECRET_TOKEN
+        sync: false
+      - key: PORT
+        value: "3001"
