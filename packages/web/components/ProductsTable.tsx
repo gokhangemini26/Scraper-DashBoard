@@ -69,7 +69,7 @@ export default function ProductsTable() {
     setIsExportingZip(false);
   };
 
-  if (!currentSessionId || products.length === 0) return null;
+  if (!currentSessionId) return null;
 
   return (
     <Card className="mt-6">

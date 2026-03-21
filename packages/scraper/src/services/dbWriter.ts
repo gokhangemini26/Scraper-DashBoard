@@ -2,6 +2,11 @@ import { supabase, log } from '../utils/logger';
 import { ProductData } from './productScraper';
 
 export const saveProduct = async (productData: ProductData, url: string, sessionId: string) => {
+  if (!supabase) {
+    console.error('saveProduct: Supabase client unavailable');
+    return;
+  }
+
   try {
     const { error } = await supabase.from('products').upsert({
       ...productData,
@@ -11,36 +16,48 @@ export const saveProduct = async (productData: ProductData, url: string, session
 
     if (error) throw new Error(error.message);
 
-    // Call RPC to increment total_saved (or we can just let frontend count via realtime)
-    // Actually, updating total_saved via SQL or Supabase update might be safer
-    // But since realtime is used, it's ok to just log it
     await log(sessionId, 'success', `Saved: ${productData.title}`);
     
-    // Update session stats
-    try {
-      const { error: rpcErr } = await supabase.rpc('increment_session_stats', { p_session_id: sessionId, p_type: 'saved' });
-      if (rpcErr) throw rpcErr;
-    } catch {
-      // Fallback if RPC doesn't exist
-      const { data } = await supabase.from('scrape_sessions').select('total_saved').eq('id', sessionId).single();
-      if (data) await supabase.from('scrape_sessions').update({ total_saved: data.total_saved + 1 }).eq('id', sessionId);
+    // Directly increment total_saved counter
+    const { data } = await supabase
+      .from('scrape_sessions')
+      .select('total_saved')
+      .eq('id', sessionId)
+      .single();
+
+    if (data) {
+      await supabase
+        .from('scrape_sessions')
+        .update({ total_saved: (data.total_saved || 0) + 1 })
+        .eq('id', sessionId);
+      console.log(`[DB] total_saved incremented to ${(data.total_saved || 0) + 1}`);
     }
 
   } catch (error: any) {
     console.error('saveProduct Error:', error.message);
     await log(sessionId, 'error', `Failed to save product: ${url}`);
     
-    await supabase.from('failed_jobs').insert({
-      session_id: sessionId,
-      url,
-      error_message: error.message
-    });
-    
-    // Fallback increment total_failed
-    supabase.from('scrape_sessions')
-      .select('total_failed').eq('id', sessionId).single()
-      .then(({ data }) => {
-        if (data) supabase.from('scrape_sessions').update({ total_failed: data.total_failed + 1 }).eq('id', sessionId).then();
+    try {
+      await supabase.from('failed_jobs').insert({
+        session_id: sessionId,
+        url,
+        error_message: error.message
       });
+
+      const { data } = await supabase
+        .from('scrape_sessions')
+        .select('total_failed')
+        .eq('id', sessionId)
+        .single();
+
+      if (data) {
+        await supabase
+          .from('scrape_sessions')
+          .update({ total_failed: (data.total_failed || 0) + 1 })
+          .eq('id', sessionId);
+      }
+    } catch (innerErr: any) {
+      console.error('Failed to log failure:', innerErr.message);
+    }
   }
 };
