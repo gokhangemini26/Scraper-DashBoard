@@ -21,25 +21,51 @@ export default function CategoryTree() {
 
     try {
       setError(null);
-      const res = await fetch('/api/scrape', {
+      const supabase = createClient();
+      
+      // 1. Create session manually on client to get sessionId
+      const { data: session, error: dbError } = await supabase
+        .from('scrape_sessions')
+        .insert({
+          target_url: originUrl,
+          status: 'pending',
+          config: { maxProducts: 50, downloadImages: true }
+        })
+        .select('id')
+        .single();
+        
+      if (dbError || !session) {
+        throw new Error(dbError?.message || 'Supabase oturumu oluşturulamadı');
+      }
+
+      // 2. Call VPS directly (Bypassing Vercel timeouts)
+      const SCRAPER_URL = process.env.NEXT_PUBLIC_SCRAPER_SERVICE_URL || 'http://79.76.98.5:3001';
+      const SCRAPER_TOKEN = process.env.NEXT_PUBLIC_SCRAPER_SECRET_TOKEN || 'Akkanat//584Tex';
+
+      const res = await fetch(`${SCRAPER_URL}/scrape`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SCRAPER_TOKEN}`
+        },
         body: JSON.stringify({
           targetUrl: originUrl,
           selectedUrls: selectedLinks,
-          config: { maxProducts: 50, downloadImages: true }
+          config: { maxProducts: 50, downloadImages: true },
+          sessionId: session.id
         })
       });
+
       const data = await res.json();
-      if (res.ok && data.sessionId) {
-        setCurrentSession(data.sessionId);
+      if (res.ok) {
+        setCurrentSession(session.id);
       } else {
-        setError(data.error || 'Tarama başlatılamadı');
+        setError(data.error || 'Scraper motoru hata döndürdü');
         setScraping(false);
       }
     } catch (e: any) {
       console.error(e);
-      setError(e.message || 'Bir hata oluştu');
+      setError(e.message || 'Bağlantı hatası oluştu');
       setScraping(false);
     }
   };
