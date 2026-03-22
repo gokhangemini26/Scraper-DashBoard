@@ -26,14 +26,10 @@ export default function UrlInputForm() {
     clearAll(); 
 
     try {
-      const SCRAPER_URL = process.env.NEXT_PUBLIC_SCRAPER_SERVICE_URL || 'http://79.76.98.5:3001';
-      const SCRAPER_TOKEN = process.env.NEXT_PUBLIC_SCRAPER_SECRET_TOKEN || 'Akkanat//584Tex';
-
-      const res = await fetch(`${SCRAPER_URL}/discover?url=${encodeURIComponent(url)}`, {
-        method: 'GET',
-        headers: { 
-          'Authorization': `Bearer ${SCRAPER_TOKEN}`
-        }
+      const res = await fetch('/api/discover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
       });
       const data = await res.json();
       
