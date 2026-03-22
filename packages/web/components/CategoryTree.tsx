@@ -1,4 +1,5 @@
-'use client';
+import { useState } from 'react';
+import * as React from 'react';
 import { useScrapeStore } from '@/stores/scrapeStore';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import { Play, Loader2, StopCircle } from 'lucide-react';
 
 export default function CategoryTree() {
   const { discoveredLinks, selectedLinks, toggleLink, selectAll, clearAll, isScraping, currentSessionId, setCurrentSession, setScraping } = useScrapeStore();
+  const [error, setError] = React.useState<string | null>(null);
 
   const handleStartScrape = async () => {
     if (selectedLinks.length === 0) return;
@@ -17,6 +19,7 @@ export default function CategoryTree() {
     const originUrl = new URL(selectedLinks[0]).origin;
 
     try {
+      setError(null);
       const res = await fetch('/api/scrape', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -29,9 +32,13 @@ export default function CategoryTree() {
       const data = await res.json();
       if (res.ok && data.sessionId) {
         setCurrentSession(data.sessionId);
+      } else {
+        setError(data.error || 'Tarama başlatılamadı');
+        setScraping(false);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      setError(e.message || 'Bir hata oluştu');
       setScraping(false);
     }
   };
@@ -79,6 +86,12 @@ export default function CategoryTree() {
           )}
         </div>
         
+        {error && (
+          <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 text-destructive text-sm rounded-md">
+            {error}
+          </div>
+        )}
+
         <ScrollArea className="h-[350px] border rounded-md p-4 bg-background">
           <div className="flex flex-col gap-3">
             {discoveredLinks.map((link) => (
