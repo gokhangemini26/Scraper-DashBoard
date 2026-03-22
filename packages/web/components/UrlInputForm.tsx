@@ -35,7 +35,12 @@ export default function UrlInputForm() {
       
       if (!res.ok) throw new Error(data.error || 'Keşif hatası');
       
-      setDiscoveredLinks(data.links || []);
+      const foundLinks = data.links || [];
+      setDiscoveredLinks(foundLinks);
+      
+      if (foundLinks.length === 0) {
+        setError('Bu sayfada taranabilir kategori linki bulunamadı. Lütfen farklı bir sayfa deneyin.');
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {

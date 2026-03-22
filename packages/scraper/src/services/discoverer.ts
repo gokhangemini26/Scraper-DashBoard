@@ -84,6 +84,7 @@ export const discoverLinks = async (targetUrl: string): Promise<DiscoverLink[]> 
     }
   } catch (error: any) {
     console.error('Discoverer Error:', error.message);
+    throw error;
   }
 
   return links;
