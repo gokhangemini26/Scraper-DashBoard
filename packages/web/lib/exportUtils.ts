@@ -17,6 +17,7 @@ export const exportSessionToExcel = async (sessionId: string) => {
     'SKU / Ürün Kodu': p.sku || '-',
     'Ürün Başlığı': p.title,
     'Açıklama': p.description || '-',
+    'Menşei (Made In)': p.made_in || '-',
     'Fiyat': p.price || 0,
     'İndirimli Fiyat': p.sale_price || '-',
     'Para Birimi': p.currency || 'TRY',

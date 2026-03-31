@@ -9,6 +9,7 @@ export interface ProductData {
   description?: string | null;
   brand?: string | null;
   category?: string | null;
+  made_in?: string | null;
   price?: number | null;
   sale_price?: number | null;
   currency?: string;
