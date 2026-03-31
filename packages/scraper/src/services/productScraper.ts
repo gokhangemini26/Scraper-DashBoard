@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import { extractMadeIn } from '../utils/productUtils';
 
 export interface ProductData {
   title: string;
@@ -7,6 +8,7 @@ export interface ProductData {
   sale_price: number | null;
   images: string[];
   sku: string | null;
+  made_in: string | null;
   in_stock: boolean;
   raw_data: any;
 }
@@ -151,6 +153,7 @@ export const scrapeProduct = async (url: string, retries = 3): Promise<ProductDa
     images,
     sku: sku ? sku.trim() : null,
     in_stock: inStock,
+    made_in: extractMadeIn($, jsonLd, description),
     raw_data: rawData,
   };
 };
