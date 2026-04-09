@@ -188,8 +188,8 @@ export const exportSessionToExcel = async (sessionId: string) => {
 
   const totalProducts = products.length;
   const inStockCount  = products.filter(p => p.in_stock).length;
-  const uniqueBrands  = [...new Set(products.map(p => p.brand).filter(Boolean))].length;
-  const uniqueColors  = [...new Set(products.map(p => p.color).filter(Boolean))].length;
+  const uniqueBrands  = Array.from(new Set(products.map(p => p.brand).filter(Boolean))).length;
+  const uniqueColors  = Array.from(new Set(products.map(p => p.color).filter(Boolean))).length;
   const avgPrice      = products.filter(p => p.price).reduce((s, p) => s + (p.price || 0), 0) / (products.filter(p => p.price).length || 1);
   const withImages    = products.filter(p => p.images?.length > 0).length;
   const withMaterial  = products.filter(p => p.material).length;
