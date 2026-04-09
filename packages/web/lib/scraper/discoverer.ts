@@ -7,12 +7,49 @@ export interface DiscoverLink {
 }
 
 /**
+ * Shopify-specific discovery using the .json endpoint.
+ * This is "God Mode" for Shopify sites, bypassing infinite scroll.
+ */
+async function fetchShopifyLinks(targetUrl: string, origin: string): Promise<DiscoverLink[]> {
+  const urlObj = new URL(targetUrl);
+  // Shopify collections usually follow /collections/name
+  if (!urlObj.pathname.includes('/collections/')) return [];
+
+  try {
+    const jsonUrl = `${origin}${urlObj.pathname.replace(/\/$/, '')}/products.json?limit=250`;
+    console.log(`[DISCOVER] Trying Shopify JSON: ${jsonUrl}`);
+    
+    const res = await fetch(jsonUrl, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    if (!data.products || !Array.isArray(data.products)) return [];
+
+    return data.products.map((p: any) => ({
+      url: `${origin}/products/${p.handle}`,
+      label: p.title,
+      depth: 2
+    }));
+  } catch (err) {
+    console.warn('[DISCOVER] Shopify JSON fetch failed, falling back to static crawl.');
+    return [];
+  }
+}
+
+/**
  * Lightweight link discoverer using fetch + cheerio.
  */
 export const discoverLinks = async (targetUrl: string): Promise<DiscoverLink[]> => {
-  const links: DiscoverLink[] = [];
   const origin = new URL(targetUrl).origin;
 
+  // 1. Try Shopify Fast-Track first
+  const shopifyLinks = await fetchShopifyLinks(targetUrl, origin);
+  if (shopifyLinks.length > 0) {
+    console.log(`[DISCOVER] Shopify Fast-Track found ${shopifyLinks.length} links.`);
+    return shopifyLinks;
+  }
+
+  const links: DiscoverLink[] = [];
   try {
     const response = await fetch(targetUrl, {
       headers: {
