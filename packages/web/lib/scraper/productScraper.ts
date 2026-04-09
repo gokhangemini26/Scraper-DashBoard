@@ -147,6 +147,7 @@ export const scrapeProduct = async (url: string, retries = 3): Promise<ProductDa
 
   images = images
     .map(img => img.startsWith('http') ? img : new URL(img, origin).href)
+    .map(img => img.replace(/^http:\/\//i, 'https://')) // Force HTTPS to avoid Mixed Content errors
     .filter(img => !img.includes('placeholder') && !img.includes('blank') && img.length > 10)
     .filter((v, i, a) => a.indexOf(v) === i)
     .slice(0, 30);

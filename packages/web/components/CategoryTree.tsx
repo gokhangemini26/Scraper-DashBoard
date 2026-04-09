@@ -12,6 +12,7 @@ import { Play, Loader2, StopCircle } from 'lucide-react';
 export default function CategoryTree() {
   const { discoveredLinks, selectedLinks, toggleLink, selectAll, clearAll, isScraping, currentSessionId, setCurrentSession, setScraping } = useScrapeStore();
   const [error, setError] = React.useState<string | null>(null);
+  const [progress, setProgress] = React.useState({ current: 0, total: 0 });
 
   const handleStartScrape = async () => {
     if (selectedLinks.length === 0) return;
@@ -40,14 +41,19 @@ export default function CategoryTree() {
 
       sessionId = initData.sessionId;
       setCurrentSession(sessionId);
+      setProgress({ current: 0, total: selectedLinks.length });
 
       // 2. Sequential Loop (One-by-One)
+      let count = 0;
       for (const url of selectedLinks) {
         // Check if user stopped the process
         if (!useScrapeStore.getState().isScraping) {
           console.log('[SCRAPE] User cancelled process.');
           break;
         }
+
+        count++;
+        setProgress({ current: count, total: selectedLinks.length });
 
         try {
           console.log(`[SCRAPE] Fetching: ${url}`);
@@ -67,7 +73,6 @@ export default function CategoryTree() {
           }
         } catch (itemErr: any) {
           console.error(`[SCRAPE] Runtime error for ${url}:`, itemErr.message);
-          // Continue to next item
         }
       }
 
@@ -118,7 +123,7 @@ export default function CategoryTree() {
             className="font-bold"
           >
             {isScraping ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Taranıyor...</>
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {progress.current}/{progress.total} Taranıyor...</>
             ) : (
               <><Play className="mr-2 h-4 w-4" /> {selectedLinks.length} Linki Tara</>
             )}
