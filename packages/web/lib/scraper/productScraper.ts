@@ -157,7 +157,9 @@ export const scrapeProduct = async (url: string, retries = 3): Promise<ProductDa
     $('[itemprop="sku"]').text().trim() || $('[class*="sku"]').first().text().replace(/[^a-zA-Z0-9\-_]/g, '').trim() || null;
 
   if (!sku) {
-    const refMatch = $('body').text().match(/Ref:\s*([A-Z0-9/_-]+)/i);
+    const pageText = $('body').text();
+    const refMatch = pageText.match(/Ref:\s*([A-Z0-9/_-]+)/i) || 
+                     pageText.match(/Reference:\s*([A-Z0-9/_-]+)/i);
     if (refMatch) sku = refMatch[1].trim();
   }
 
