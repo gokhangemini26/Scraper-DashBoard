@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { supabase, log } from '@/lib/scraper/logger';
+import { scrapeProduct } from '@/lib/scraper/productScraper';
+import { saveProduct } from '@/lib/scraper/dbWriter';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
-
-const SCRAPER_URL = (process.env.SCRAPER_SERVICE_URL || 'http://localhost:3001').trim().replace(/\/+$/, '');
-const SCRAPER_TOKEN = (process.env.SCRAPER_SECRET_TOKEN || 'generate-a-random-string-here').trim();
+export const maxDuration = 60; // 60 seconds (Vercel max for Hobby)
 
 export async function POST(req: Request) {
+  let sessionId = '';
+
   try {
     const body = await req.json();
     const { targetUrl, selectedUrls, config } = body;
@@ -16,14 +17,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
-    const supabase = createClient();
-    
-    // Create new scrape session
+    // 1. Create new scrape session
     const { data: session, error: dbError } = await supabase
       .from('scrape_sessions')
       .insert({
         target_url: targetUrl,
-        status: 'pending',
+        status: 'ongoing',
         config: config || {}
       })
       .select('id')
@@ -33,32 +32,54 @@ export async function POST(req: Request) {
       throw new Error(`Failed to create session: ${dbError?.message}`);
     }
 
-    // Trigger scraper — MUST await so Vercel doesn't kill the request
-    const scraperRes = await fetch(`${SCRAPER_URL}/scrape`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SCRAPER_TOKEN}`
-      },
-      body: JSON.stringify({
-        targetUrl,
-        selectedUrls,
-        config: config || { maxProducts: 100, downloadImages: true },
-        sessionId: session.id
-      }),
-      signal: AbortSignal.timeout(55000)
-    });
+    sessionId = session.id;
 
-    if (!scraperRes.ok) {
-      let errorBody = '';
-      try { errorBody = await scraperRes.text(); } catch {}
-      console.error(`Scraper trigger failed ${scraperRes.status}:`, errorBody);
+    // 2. Perform scraping DIRECTLY (Serverless mode)
+    // Note: This is limited by Vercel's 60s execution timeout.
+    // For large sessions, a more advanced queueing system would be needed.
+    
+    // Using a promise-based loop to stay within the timeout
+    const startTime = Date.now();
+    let processedCount = 0;
+
+    for (const url of selectedUrls) {
+      // Check if we are approaching the 60s limit (leave 5s buffer)
+      if (Date.now() - startTime > 55000) {
+        await log(sessionId, 'warn', 'Vercel timeout approaching. Stopping early.');
+        break;
+      }
+
+      try {
+        const productData = await scrapeProduct(url);
+        await saveProduct(productData, url, sessionId);
+        processedCount++;
+      } catch (err: any) {
+        console.error(`Error scraping ${url}:`, err.message);
+        await log(sessionId, 'error', `Failed to scrape ${url}: ${err.message}`);
+      }
     }
 
-    return NextResponse.json({ sessionId: session.id });
+    // 3. Update session status
+    await supabase
+      .from('scrape_sessions')
+      .update({ 
+        status: 'completed',
+        total_saved: processedCount
+      })
+      .eq('id', sessionId);
+
+    return NextResponse.json({ sessionId, processedCount });
 
   } catch (error: any) {
     console.error('Scrape Route Error:', error.message);
+    
+    if (sessionId) {
+      await supabase
+        .from('scrape_sessions')
+        .update({ status: 'failed' })
+        .eq('id', sessionId);
+    }
+
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }
