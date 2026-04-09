@@ -49,21 +49,25 @@ export default function CategoryTree() {
           break;
         }
 
-        console.log(`[SCRAPE] Fetching: ${url}`);
-        const itemRes = await fetch('/api/scrape', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            mode: 'scrape-item',
-            url,
-            sessionId
-          })
-        });
+        try {
+          console.log(`[SCRAPE] Fetching: ${url}`);
+          const itemRes = await fetch('/api/scrape', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              mode: 'scrape-item',
+              url,
+              sessionId
+            })
+          });
 
-        if (!itemRes.ok) {
-          const itemData = await itemRes.json();
-          console.warn(`[SCRAPE] Failed item ${url}:`, itemData.error);
-          // We continue to the next item even if one fails
+          if (!itemRes.ok) {
+            const itemData = await itemRes.json();
+            console.warn(`[SCRAPE] Failed item ${url}:`, itemData.error);
+          }
+        } catch (itemErr: any) {
+          console.error(`[SCRAPE] Runtime error for ${url}:`, itemErr.message);
+          // Continue to next item
         }
       }
 
