@@ -81,7 +81,7 @@ export default function ProductsTable() {
   return (
     <Card className="mt-6">
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Döküm: Son Eklenen Ürünler (Canlı 50 Kayıt)</CardTitle>
+        <CardTitle>Döküm: Son Eklenen Ürünler</CardTitle>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={isExportingExcel}>
             {isExportingExcel ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}

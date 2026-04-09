@@ -112,7 +112,7 @@ export const scrapeProduct = async (url: string, retries = 3): Promise<ProductDa
   }
   const sale_price = salePriceStr ? parseFloat(salePriceStr.replace(/[^0-9.,]/g, '').replace(',', '.')) || null : null;
 
-  const currency = offers?.priceCurrency || meta('product:price:currency') || 'TRY';
+  const currency = offers?.priceCurrency || meta('product:price:currency') || meta('og:price:currency') || null;
 
   // ── Images ───────────────────────────────────────────────────────────────
   let images: string[] = [];
