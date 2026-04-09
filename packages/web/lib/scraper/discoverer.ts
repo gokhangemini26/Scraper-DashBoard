@@ -19,7 +19,13 @@ async function fetchShopifyLinks(targetUrl: string, origin: string): Promise<Dis
     const jsonUrl = `${origin}${urlObj.pathname.replace(/\/$/, '')}/products.json?limit=250`;
     console.log(`[DISCOVER] Trying Shopify JSON: ${jsonUrl}`);
     
-    const res = await fetch(jsonUrl, { signal: AbortSignal.timeout(10000) });
+    const res = await fetch(jsonUrl, { 
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*'
+      },
+      signal: AbortSignal.timeout(10000) 
+    });
     if (!res.ok) return [];
 
     const data = await res.json();
@@ -27,7 +33,7 @@ async function fetchShopifyLinks(targetUrl: string, origin: string): Promise<Dis
 
     return data.products.map((p: any) => ({
       url: `${origin}/products/${p.handle}`,
-      label: p.title,
+      label: `[Ürün] ${p.title}`,
       depth: 2
     }));
   } catch (err) {
@@ -53,7 +59,7 @@ export const discoverLinks = async (targetUrl: string): Promise<DiscoverLink[]> 
   try {
     const response = await fetch(targetUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9,tr;q=0.8',
       },
@@ -74,6 +80,9 @@ export const discoverLinks = async (targetUrl: string): Promise<DiscoverLink[]> 
       '[class*="menu"] a[href]',
       '[class*="nav"] a[href]',
       '[class*="category"] a[href]',
+      '.product-card a[href]',
+      '.product-grid a[href]',
+      '.collection-products a[href]'
     ];
 
     const rawLinks: { href: string; text: string }[] = [];
@@ -100,17 +109,16 @@ export const discoverLinks = async (targetUrl: string): Promise<DiscoverLink[]> 
 
         if (urlObj.origin !== origin) continue; // Same domain only
 
-        // Skip obvious product URLs
-        const lowerUrl = cleanUrl.toLowerCase();
-        if (lowerUrl.includes('/product/') || lowerUrl.includes('/p/') || lowerUrl.includes('/item/')) {
-          continue;
-        }
-
         if (!uniqueUrls.has(cleanUrl)) {
           uniqueUrls.add(cleanUrl);
+          
+          const lowerUrl = cleanUrl.toLowerCase();
+          const isProduct = lowerUrl.includes('/products/') || lowerUrl.includes('/p/') || lowerUrl.includes('/item/');
+          const prefix = isProduct ? '[Ürün]' : '[Kategori]';
+
           links.push({
             url: cleanUrl,
-            label: item.text || cleanUrl.replace(origin, ''),
+            label: `${prefix} ${item.text || cleanUrl.replace(origin, '')}`,
             depth: urlObj.pathname.split('/').filter(Boolean).length,
           });
         }
