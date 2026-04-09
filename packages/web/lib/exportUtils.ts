@@ -171,8 +171,8 @@ export const exportSessionToExcel = async (sessionId: string) => {
         });
 
         ws.addImage(imageId, {
-          tl: { col: PHOTO_COL_IDX - 1, row: row - 1 },      // top-left cell (0-indexed)
-          br: { col: PHOTO_COL_IDX,     row: row     },       // bottom-right cell
+          tl: { col: PHOTO_COL_IDX - 1, row: row - 1 } as any,      // top-left cell (0-indexed)
+          br: { col: PHOTO_COL_IDX,     row: row     } as any,       // bottom-right cell
           editAs: 'oneCell',
         });
       }
