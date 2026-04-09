@@ -249,7 +249,8 @@ export const scrapeProduct = async (url: string, retries = 3): Promise<ProductDa
   const ingSelectors = [
     'table tr', 'dl dt', '[class*="spec"] li', '[class*="detail"] li',
     '[class*="ingredients"]', '#ingredients', '.ingredients-text',
-    'details[id*="composition_tab"] .accordion__content'
+    'details[id*="composition_tab"] .accordion__content',
+    'details[id*="Details-composition_tab"] .accordion__content'
   ];
 
   $(ingSelectors.join(', ')).each((_i: number, el: any) => {
@@ -273,15 +274,27 @@ export const scrapeProduct = async (url: string, retries = 3): Promise<ProductDa
 
   let country_of_origin: string | null = jsonLd?.countryOfOrigin || meta('product:country_of_origin') || null;
   if (!country_of_origin) {
-    const coKeys = ['made in','üretim yeri','menşei','origin','country'];
-    $('table tr, dl, [class*="spec"] li, [class*="detail"] li, [class*="info"] li, p').each((_i: number, el: any) => {
+    const coKeys = ['made in','üretim yeri','menşei','origin','country','manufacturing'];
+    $('table tr, dl, [class*="spec"] li, [class*="detail"] li, [class*="info"] li, p, .accordion__content').each((_i: number, el: any) => {
       if (country_of_origin) return;
       const t = $(el).text().toLowerCase();
       if (coKeys.some(k => t.includes(k))) {
-        const match = $(el).text().match(/(?:made in|üretim yeri|menşei|origin)[:\s]+([^\n,<]{2,50})/i);
-        if (match) country_of_origin = match[1].trim();
+        // Look for common patterns like "Manufacturing: Turkey" or "Product Manufacturing: France"
+        const match = $(el).text().match(/(?:made in|üretim yeri|menşei|origin|manufacturing|manufacturing value)[:\s]+([^\n,<]{2,100})/i);
+        if (match) {
+          const val = match[1].trim();
+          // Filter out long sentences, keep country name
+          if (val.length < 50) country_of_origin = val;
+        }
       }
     });
+
+    // Special check for Eden Park text block containing "Product Manufacturing: Turkey"
+    if (!country_of_origin) {
+      const pageText = $('body').text();
+      const emMatch = pageText.match(/Product Manufacturing[:\s]+([^\n.,]{2,50})/i);
+      if (emMatch) country_of_origin = emMatch[1].trim();
+    }
   }
 
   const weight = jsonLd?.weight || $('[itemprop="weight"]').text().trim() || null;

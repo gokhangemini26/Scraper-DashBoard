@@ -97,8 +97,11 @@ export default function CategoryTree() {
   return (
     <Card className="mt-6 border-primary/20 bg-primary/5">
       <CardHeader>
-        <CardTitle>Keşfedilen Kategoriler</CardTitle>
-        <CardDescription>{discoveredLinks.length} adet hedef sayfa bulundu. Taramak istediklerinizi seçin.</CardDescription>
+        <CardTitle>Keşfedilen Ürünler</CardTitle>
+        <CardDescription>
+          {discoveredLinks.length} adet ürün bulundu. 
+          <b> Hepsini taramak için "Tümünü Seç" butonuna basın.</b>
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex gap-2 mb-4">
