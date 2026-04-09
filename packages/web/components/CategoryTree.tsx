@@ -16,31 +16,71 @@ export default function CategoryTree() {
   const handleStartScrape = async () => {
     if (selectedLinks.length === 0) return;
     setScraping(true);
+    setError(null);
     
     const originUrl = new URL(selectedLinks[0]).origin;
+    let sessionId = '';
 
     try {
-      setError(null);
-      const res = await fetch('/api/scrape', {
+      // 1. Initialize Session
+      const initRes = await fetch('/api/scrape', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          mode: 'init',
           targetUrl: originUrl,
-          selectedUrls: selectedLinks,
-          config: { maxProducts: 50, downloadImages: true }
+          config: { downloadImages: true }
         })
       });
 
-      const data = await res.json();
-      if (res.ok && data.sessionId) {
-        setCurrentSession(data.sessionId);
-      } else {
-        setError(data.error || 'Tarama başlatılamadı');
-        setScraping(false);
+      const initData = await initRes.json();
+      if (!initRes.ok || !initData.sessionId) {
+        throw new Error(initData.error || 'Oturum başlatılamadı');
       }
+
+      sessionId = initData.sessionId;
+      setCurrentSession(sessionId);
+
+      // 2. Sequential Loop (One-by-One)
+      for (const url of selectedLinks) {
+        // Check if user stopped the process
+        if (!useScrapeStore.getState().isScraping) {
+          console.log('[SCRAPE] User cancelled process.');
+          break;
+        }
+
+        console.log(`[SCRAPE] Fetching: ${url}`);
+        const itemRes = await fetch('/api/scrape', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mode: 'scrape-item',
+            url,
+            sessionId
+          })
+        });
+
+        if (!itemRes.ok) {
+          const itemData = await itemRes.json();
+          console.warn(`[SCRAPE] Failed item ${url}:`, itemData.error);
+          // We continue to the next item even if one fails
+        }
+      }
+
+      // 3. Mark Session as Completed
+      await fetch('/api/scrape', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'complete',
+          sessionId
+        })
+      });
+
     } catch (e: any) {
       console.error(e);
       setError(e.message || 'Bir hata oluştu');
+    } finally {
       setScraping(false);
     }
   };
