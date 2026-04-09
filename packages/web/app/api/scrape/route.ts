@@ -35,28 +35,31 @@ export async function POST(req: Request) {
     sessionId = session.id;
 
     // 2. Perform scraping DIRECTLY (Serverless mode)
-    // Note: This is limited by Vercel's 60s execution timeout.
-    // For large sessions, a more advanced queueing system would be needed.
-    
-    // Using a promise-based loop to stay within the timeout
+    // We use parallel execution (concurrency: 5) to maximize products within the 60s limit.
     const startTime = Date.now();
     let processedCount = 0;
+    const CONCURRENCY = 5;
 
-    for (const url of selectedUrls) {
+    for (let i = 0; i < selectedUrls.length; i += CONCURRENCY) {
       // Check if we are approaching the 60s limit (leave 5s buffer)
       if (Date.now() - startTime > 55000) {
         await log(sessionId, 'warn', 'Vercel timeout approaching. Stopping early.');
         break;
       }
 
-      try {
-        const productData = await scrapeProduct(url);
-        await saveProduct(productData, url, sessionId);
-        processedCount++;
-      } catch (err: any) {
-        console.error(`Error scraping ${url}:`, err.message);
-        await log(sessionId, 'error', `Failed to scrape ${url}: ${err.message}`);
-      }
+      const chunk = selectedUrls.slice(i, i + CONCURRENCY);
+      
+      // Process chunk in parallel
+      await Promise.all(chunk.map(async (url) => {
+        try {
+          const productData = await scrapeProduct(url);
+          await saveProduct(productData, url, sessionId);
+          processedCount++;
+        } catch (err: any) {
+          console.error(`Error scraping ${url}:`, err.message);
+          await log(sessionId, 'error', `Failed to scrape ${url}: ${err.message}`);
+        }
+      }));
     }
 
     // 3. Update session status
