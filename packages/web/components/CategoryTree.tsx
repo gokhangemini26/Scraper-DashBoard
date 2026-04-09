@@ -41,35 +41,52 @@ export default function CategoryTree() {
 
       sessionId = initData.sessionId;
       setCurrentSession(sessionId);
-      setProgress({ current: 0, total: selectedLinks.length });
 
-      // 2. Sequential Loop (One-by-One)
-      let count = 0;
-      for (const url of selectedLinks) {
-        // Check if user stopped the process
-        if (!useScrapeStore.getState().isScraping) {
-          console.log('[SCRAPE] User cancelled process.');
-          break;
+      // 2. Expand Queue (If category selected, find products first)
+      const finalQueue: string[] = [];
+      for (const link of selectedLinks) {
+        if (link.includes('/collections/')) {
+          console.log(`[EXPAND] Category detected: ${link}. Finding products...`);
+          const discRes = await fetch('/api/discover', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: link })
+          });
+          const discData = await discRes.json();
+          if (discRes.ok && discData.links) {
+            // Add only products from that category
+            const products = discData.links
+              .filter((l: any) => l.url.includes('/products/'))
+              .map((l: any) => l.url);
+            finalQueue.push(...products);
+          }
+        } else {
+          finalQueue.push(link);
         }
+      }
+
+      // Remove duplicates
+      const uniqueQueue = Array.from(new Set(finalQueue));
+      setProgress({ current: 0, total: uniqueQueue.length });
+
+      // 3. Sequential Loop (One-by-One)
+      let count = 0;
+      for (const url of uniqueQueue) {
+        if (!useScrapeStore.getState().isScraping) break;
 
         count++;
-        setProgress({ current: count, total: selectedLinks.length });
+        setProgress({ current: count, total: uniqueQueue.length });
 
         try {
-          console.log(`[SCRAPE] Fetching: ${url}`);
+          console.log(`[SCRAPE] Fetching Product (${count}/${uniqueQueue.length}): ${url}`);
           const itemRes = await fetch('/api/scrape', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              mode: 'scrape-item',
-              url,
-              sessionId
-            })
+            body: JSON.stringify({ mode: 'scrape-item', url, sessionId })
           });
-
+          
           if (!itemRes.ok) {
-            const itemData = await itemRes.json();
-            console.warn(`[SCRAPE] Failed item ${url}:`, itemData.error);
+            console.warn(`[SCRAPE] Failed item ${url}`);
           }
         } catch (itemErr: any) {
           console.error(`[SCRAPE] Runtime error for ${url}:`, itemErr.message);
